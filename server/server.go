@@ -2,7 +2,9 @@ package main
 
 import (
 	"flag"
+	"os"
 	"sync"
+	"time"
 
 	"github.com/ailidani/paxi"
 	"github.com/ailidani/paxi/atomic"
@@ -19,6 +21,7 @@ import (
 
 var id = flag.String("id", "", "ID in format of Zone.Node.")
 var simulation = flag.Bool("sim", false, "simulation mode")
+var uptime = flag.Duration("uptime", 0*time.Second, "exit after timeout")
 
 var master = flag.String("master", "", "Master address.")
 
@@ -65,6 +68,14 @@ func replica(id paxi.ID) {
 
 func main() {
 	paxi.Init()
+
+	if *uptime > 0 {
+		log.Debugf("running for %s", *uptime)
+		time.AfterFunc(*uptime, func() {
+			log.Info("shutting down")
+			os.Exit(0)
+		})
+	}
 
 	if *simulation {
 		var wg sync.WaitGroup
