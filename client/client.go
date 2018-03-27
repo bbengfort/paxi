@@ -3,13 +3,16 @@ package main
 import (
 	"encoding/binary"
 	"flag"
+	"time"
 
 	"github.com/ailidani/paxi"
+	"github.com/ailidani/paxi/log"
 )
 
 var id = flag.String("id", "", "node id this client connects to")
 var api = flag.String("api", "", "Client API type [rest, json, quorum]")
 var master = flag.String("master", "", "Master address.")
+var delay = flag.Duration("delay", 0*time.Second, "wait before starting benchmark")
 
 // db implements Paxi.DB interface for benchmarking
 type db struct {
@@ -57,6 +60,11 @@ func (d *db) Write(k, v int) {
 
 func main() {
 	paxi.Init()
+
+	if *delay > 0 {
+		log.Debugf("waiting for %s", *delay)
+		time.Sleep(*delay)
+	}
 
 	if *master != "" {
 		paxi.ConnectToMaster(*master, true, paxi.ID(*id))

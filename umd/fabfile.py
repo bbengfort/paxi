@@ -1,11 +1,9 @@
+# -*- coding: utf-8 -*-
 # fabfile
 # Fabric command definitions for running ePaxos geo replicated experiments.
 #
 # Author:   Benjamin Bengfort <benjamin@bengfort.com>
 # Created:  Mon Feb 26 09:02:22 2018 -0500
-#
-# Copyright (C) 2018 Benjamin Bengfort
-# For license information, see LICENSE.txt
 #
 # ID: fabfile.py [] benjamin@bengfort.com $
 
@@ -20,32 +18,14 @@ Fabric command definitions for running ePaxos geo replicated experiments.
 import os
 import json
 
+from utils import *
+from tabulate import tabulate
 from dotenv import load_dotenv, find_dotenv
 
 from fabric.contrib import files
-from fabric.api import env, run, cd, get
 from fabric.colors import red, green, cyan
-from fabric.api import parallel, task, runs_once, execute
-
-
-##########################################################################
-## Environment Helpers
-##########################################################################
-
-# Load the host information
-def load_hosts(path):
-    with open(path, 'r') as f:
-        return json.load(f)
-
-
-def parse_bool(val):
-    if isinstance(val, basestring):
-        val = val.lower().strip()
-        if val in {'yes', 'y', 'true', 't', '1'}:
-            return True
-        if val in {'no', 'n', 'false', 'f', '0'}:
-            return False
-    return bool(val)
+from fabric.api import env, run, cd, get, put, hide
+from fabric.api import parallel, task, runs_once, execute, local
 
 
 ##########################################################################
@@ -66,9 +46,11 @@ repo = "~/workspace/go/src/github.com/ailidani/paxi"
 ## Load Hosts
 hosts = load_hosts(hostinfo)
 addrs = {info['hostname']: host for host, info in hosts.items()}
-env.hosts = sorted(list(hosts.keys()))
+regions = load_host_regions(hosts)
+region_ids = list(sorted(regions.keys()))
 
 ## Fabric Env
+env.hosts = sorted(list(hosts.keys()))
 env.user = "ubuntu"
 env.colorize_errors = True
 env.use_ssh_config = True
@@ -101,24 +83,6 @@ def round_robin(n, host, hosts=env.hosts):
     if n % len(hosts) > 0 and idx < (n % len(hosts)):
         num += 1
     return num
-
-
-def add_suffix(path, suffix=None):
-    if suffix:
-        base, ext = os.path.splitext(path)
-        path = "{}-{}{}".format(base, suffix, ext)
-    return path
-
-
-def unique_name(path, start=0, maxtries=1000):
-    for idx in range(start+1, start+maxtries):
-        ipath = add_suffix(path, idx)
-        if not os.path.exists(ipath):
-            return ipath
-
-    raise ValueError(
-        "could not get a unique path after {} tries".format(maxtries)
-    )
 
 
 def make_string_args(flags=[], args={}):
@@ -213,12 +177,31 @@ def update():
 
 
 @parallel
-def version():
+def _version():
     """
     Get the current epaxos version number
     """
     with cd(repo):
-        run("git rev-parse --short HEAD")
+        return run("git rev-parse --short HEAD")
+
+
+@task
+@runs_once
+def version():
+    """
+    Gets the current version and compares with remote versions
+    """
+    current_version = local("git rev-parse --short HEAD", capture=True)
+    table = [["Host", "Version", "Current"], ["local", current_version, "-"]]
+
+    with hide('running', 'stdout'):
+        versions = execute(_version)
+
+    for host, line in versions.items():
+        current = green(u"✓") if line == current_version else red(u"✗")
+        table.append([host, line, current])
+
+    print(tabulate(table, tablefmt="simple", headers="firstrow"))
 
 
 @task
@@ -233,41 +216,33 @@ def cleanup():
         run("rm -f *.log")
 
 
+@task
 @parallel
-def bench(config="configs/config.json"):
+def bench(config="config.json"):
     """
     Run the ePaxos server on the specified machine, as well as the ePaxos
     master if this machine is designated master. If this machine is designated
     as a client, run that as well. Designations are defined by the config.
     """
-    command = []
-
-    # load the configuration
     with open(config, 'r') as f:
         config = json.load(f)
 
-    # Create the master command
-    args = make_master_args(config, env.host)
-    if args:
-        command.append("epaxos-master {}".format(args))
+    host = addrs[env.host]
+    rid = "{}.{}".format(region_ids.index(host_region(host))+1, host_id(host))
 
-    # Create the server command
-    args = make_server_args(config, env.host)
-    if args:
-        command.append("epaxos-server {}".format(args))
-
-    # Create the client command
-    args = make_client_args(config, env.host)
-    if args:
-        command.append("epaxos-client {}".format(args))
-
-    if not command:
+    if rid not in config["address"]:
         return
+
+    command = [
+        "paxi-server -log_level 1 -id {} -uptime 75s".format(rid),
+        "paxi-client -id {} -log_level 1 -delay 5s".format(rid),
+    ]
 
     with cd(workspace):
         run(pproc_command(command))
 
 
+@task
 @parallel
 def getmerge(name="results.txt", path="data", suffix=None):
     """
@@ -279,3 +254,10 @@ def getmerge(name="results.txt", path="data", suffix=None):
     local  = unique_name(local)
     if files.exists(remote):
         get(remote, local)
+
+
+@task
+@parallel
+def putconfig(config="config.json"):
+    remote = os.path.join(workspace, "config.json")
+    put(config, remote)
