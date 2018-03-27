@@ -80,3 +80,11 @@ def unique_name(path, start=0, maxtries=1000):
     raise ValueError(
         "could not get a unique path after {} tries".format(maxtries)
     )
+
+
+##########################################################################
+## Stats Helpers
+##########################################################################
+
+def mean(vals):
+    return sum([float(v) for v in vals]) / float(len(vals))

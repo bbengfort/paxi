@@ -224,6 +224,10 @@ def bench(config="config.json"):
     master if this machine is designated master. If this machine is designated
     as a client, run that as well. Designations are defined by the config.
     """
+    # Put the config on the remote
+    remote = os.path.join(workspace, "config.json")
+    put(config, remote)
+
     with open(config, 'r') as f:
         config = json.load(f)
 
@@ -234,7 +238,7 @@ def bench(config="config.json"):
         return
 
     command = [
-        "paxi-server -log_level 1 -id {} -uptime 75s".format(rid),
+        "paxi-server -log_level 1 -id {} -uptime 3m".format(rid),
         "paxi-client -id {} -log_level 1 -delay 5s".format(rid),
     ]
 
@@ -244,16 +248,30 @@ def bench(config="config.json"):
 
 @task
 @parallel
-def getmerge(name="results.txt", path="data", suffix=None):
+def getmerge(path="data", suffix=None, results=True, latency=True, history=False, logs=False):
     """
     Get the results.txt save them with the specified suffix to the localpath.
     """
-    remote = os.path.join(workspace, name)
-    hostname = addrs[env.host]
-    local = os.path.join(path, hostname, add_suffix(name, suffix))
-    local  = unique_name(local)
-    if files.exists(remote):
-        get(remote, local)
+    def _getmerge(name):
+        remote = os.path.join(workspace, name)
+        local = unique_name(
+            os.path.join(path, addrs[env.host], add_suffix(name, suffix))
+        )
+
+        if files.exists(remote):
+            get(remote, local)
+
+    if results:
+        _getmerge("results.jsonl")
+
+    if history:
+        _getmerge("history")
+
+    if latency:
+        _getmerge("latency")
+
+    if logs:
+        _getmerge("*.log")
 
 
 @task

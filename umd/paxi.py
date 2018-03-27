@@ -21,6 +21,8 @@ import json
 import argparse
 
 from utils import *
+from tabulate import tabulate
+from operator import itemgetter
 from fabric.colors import red, green, cyan, magenta
 
 
@@ -76,14 +78,29 @@ def tput(args):
     """
     Reads a latency file and computes the throughput
     """
-    total, count = 0.0, 0.0
 
-    for val in args.latency:
-        if not val.strip(): continue
-        total += float(val) # val is milliseconds
-        count += 1
+    def _tput(path):
+        host = os.path.basename(os.path.dirname(path))
+        total, count = 0.0, 0.0
 
-    print("throughput: {:0.3f}".format(count/(total/1000.0)))
+        with open(path) as f:
+            for val in f:
+                if not val.strip(): continue
+                total += float(val) # val is milliseconds
+                count += 1
+
+        return host, count/(total/1000.0)
+
+    results = [
+        dict(zip(("host", "ops/sec"), _tput(path))) for path in args.latency
+    ]
+    results.sort(key=itemgetter("ops/sec"), reverse=True)
+    results.append({
+        "host": cyan("average"), "ops/sec": cyan(mean([r["ops/sec"] for r in results]))
+    })
+
+    print(tabulate(results, tablefmt="simple", headers="keys"))
+
 
 
 
@@ -131,8 +148,8 @@ if __name__ == '__main__':
             "func": tput,
             "args": {
                 "latency": {
-                    "type": argparse.FileType("r"),
-                    "help": "latency file output by client benchmark"
+                    "nargs": "*",
+                    "help": "latency file output by client benchmark",
                 },
             },
         },

@@ -157,6 +157,16 @@ func (b *Benchmark) Run() {
 			log.Infof("Anomaly percentage is %f", float64(n)/float64(stat.Size))
 		}
 	}
+
+	// other results written to disk
+	results := make(map[string]interface{})
+	results["operations"] = len(b.latency)
+	results["seconds"] = t.Seconds()
+	results["replicas"] = config.NumNodes()
+	results["regions"] = config.NumZones()
+	results["conflict"] = b.bconfig.Conflicts
+	results["latency"] = stat.String()
+	AppendJSON("results.jsonl", results)
 }
 
 // generates key based on distribution

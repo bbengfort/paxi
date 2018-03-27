@@ -2,8 +2,10 @@ package paxi
 
 import (
 	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"time"
 
 	"github.com/ailidani/paxi/log"
@@ -83,4 +85,26 @@ func ConnectToMaster(addr string, client bool, id ID) {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func AppendJSON(path string, val interface{}) error {
+	// Open the file for appending, creating it if necessary
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// Marshal the JSON in one line without indents
+	data, err := json.Marshal(val)
+	if err != nil {
+		return err
+	}
+
+	// Append a newline to the data
+	data = append(data, byte('\n'))
+
+	// Append the data to the file
+	_, err = f.Write(data)
+	return err
 }
