@@ -17,6 +17,7 @@ Fabric command definitions for running ePaxos geo replicated experiments.
 
 import os
 import json
+import time
 
 from utils import *
 from tabulate import tabulate
@@ -227,6 +228,7 @@ def bench(config="config.json"):
     # Put the config on the remote
     remote = os.path.join(workspace, "config.json")
     put(config, remote)
+    time.sleep(3)
 
     with open(config, 'r') as f:
         config = json.load(f)

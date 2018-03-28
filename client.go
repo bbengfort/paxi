@@ -9,10 +9,14 @@ import (
 	"net/http/httputil"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/ailidani/paxi/lib"
 	"github.com/ailidani/paxi/log"
 )
+
+// http client
+var httpClient = &http.Client{Timeout: time.Second * 1}
 
 // Client main access point of client lib
 type Client struct {
@@ -56,7 +60,7 @@ func (c *Client) rest(id ID, key Key, value Value) Value {
 	r.Header.Set(HTTPClientID, string(c.ID))
 	r.Header.Set(HTTPCommandID, strconv.Itoa(c.cid))
 	// r.Header.Set(HTTPTimestamp, strconv.FormatInt(time.Now().UnixNano(), 10))
-	res, err := http.DefaultClient.Do(r)
+	res, err := httpClient.Do(r)
 	if err != nil {
 		log.Error(err)
 		return nil
@@ -119,7 +123,7 @@ func (c *Client) json(id ID, key Key, value Value) Value {
 		CommandID: c.cid,
 	}
 	data, err := json.Marshal(cmd)
-	res, err := http.Post(url, "json", bytes.NewBuffer(data))
+	res, err := httpClient.Post(url, "json", bytes.NewBuffer(data))
 	if err != nil {
 		log.Error(err)
 		return nil
@@ -196,7 +200,7 @@ func (c *Client) Consensus(k Key) bool {
 	h := make(map[ID][]Value)
 	for id, url := range c.http {
 		h[id] = make([]Value, 0)
-		r, err := http.Get(url + "/history?key=" + strconv.Itoa(int(k)))
+		r, err := httpClient.Get(url + "/history?key=" + strconv.Itoa(int(k)))
 		if err != nil {
 			log.Error(err)
 			continue
@@ -239,7 +243,7 @@ func (c *Client) Consensus(k Key) bool {
 // node crash forever if t < 0
 func (c *Client) Crash(id ID, t int) {
 	url := c.http[id] + "/crash?t=" + strconv.Itoa(t)
-	r, err := http.Get(url)
+	r, err := httpClient.Get(url)
 	if err != nil {
 		log.Error(err)
 		return
@@ -250,7 +254,7 @@ func (c *Client) Crash(id ID, t int) {
 // Drop drops every message send for t seconds
 func (c *Client) Drop(from, to ID, t int) {
 	url := c.http[from] + "/drop?id=" + string(to) + "&t=" + strconv.Itoa(t)
-	r, err := http.Get(url)
+	r, err := httpClient.Get(url)
 	if err != nil {
 		log.Error(err)
 		return
