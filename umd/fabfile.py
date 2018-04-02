@@ -214,8 +214,9 @@ def cleanup():
     with cd(workspace):
         run("rm -f history")
         run("rm -f latency")
+        run("rm -f results.jsonl")
         run("rm -f *.log")
-
+    
 
 @task
 @parallel
